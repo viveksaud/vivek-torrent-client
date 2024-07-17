@@ -1,15 +1,10 @@
 import { createSocket } from "dgram";
 import { Buffer } from "buffer";
-import { parse as urlParse } from "url";
+import { URL } from "url";
+import crypto from "crypto";
 
-```
-The tracker expects the message following this spcific protocol:-
-- Send a connect request
-- Get the connect response and extract the connection id
-- Use the connection id to send an announce request - this is where we tell the tracker which files we’re interested in
-- Get the announce response and extract the peers list
-```
-export function getPeers(torrent, callback) {
+
+export const getPeers = (torrent, callback) => {
   const socket = createSocket("udp4");
   const url = torrent.announce.toString("utf8");
 
@@ -30,10 +25,11 @@ export function getPeers(torrent, callback) {
       callback(announceResp.peers);
     }
   });
-}
+};
 
 function udpSend(socket, message, rawUrl, callback = () => {}) {
-  const url = urlParse(rawUrl);
+
+  const url = new URL(rawUrl);
   socket.send(message, 0, message.length, url.port, url.host, callback);
 }
 
@@ -41,13 +37,29 @@ function respType(resp) {
   // ...
 }
 
-function buildConnReq() {
-  // ...
-}
+const buildConnReq = () => {
+  const buf = Buffer.allocUnsafe(16);
 
-function parseConnResp(resp) {
-  // ...
-}
+  // connection id = 0x41727101980 (fix value according to BEP description)
+  buf.writeUInt32BE(0x417, 0); //big-endian(BE) format: most significant byte stored in lowest memory address
+  buf.writeUInt32BE(0x27101980, 4); //write of fixed 64 bit magic number  0x41727101980 got splited into two times write of 32bit number with BE formt, since node doesn't support direct write of  64 bit integer or float
+
+  // action
+  buf.writeUInt32BE(0, 8); // value is always 0 for connection request and since above size is of 8bytes, so offest is 8
+
+  // transaction id
+  crypto.randomBytes(4).copy(buf, 12); //random 4 byte buffer
+
+  return buf;
+};
+
+const parseConnResp = (resp) => {
+  return {
+    action: resp.readUInt32BE(0),
+    transactionId: resp.readUInt32BE(4),
+    connectionId: resp.slice(8), //since node doesn't support reading of 64 bit integer, so we managed to get it by slicing at offset 8
+  };
+};
 
 function buildAnnounceReq(connId) {
   // ...
