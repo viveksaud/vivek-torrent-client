@@ -5,7 +5,7 @@ let id = null;
 export const genId = () => {
     if (!id) {
         id = crypto.randomBytes(20);
-        Buffer.from('-VT0001-').copy(id,0);//VT-vivektorrent
+        Buffer.from('-VT0001-').copy(id,0);//VT-vivektorrent version 0.0.0.1
     }
     return id;
 }
