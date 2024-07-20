@@ -10,19 +10,12 @@ import  * as torrentParser from './torrent-parser.js'
 export const getPeers = (torrent, callback) => {
   const socket = createSocket("udp4");
 
-  // const url = torrent.announce.toString("utf8");
-  const url = String.fromCharCode.apply(null, torrent.announce);
-  
-  console.log("mathi",url)
-
-// const url = parse(torrent.announce.toString("utf8"));
+  const decoder = new TextDecoder();
+  const url = decoder.decode(torrent.announce);
+  console.log("url=",url)
 
   // 1. send connect request
   udpSend(socket, buildConnReq(), url);
-  
-
-  // 1. send connect request
-  // udpSend(socket, buildConnReq(), url);
 
   socket.on("message", (response) => {
     if (respType(response) === "connect") {
@@ -49,16 +42,7 @@ function udpSend(socket, message, rawUrl, callback = () => {}) {
   console.log("url=", url)
   socket.send(message, 0, message.length, url.port, url.host, callback);
 }
-// function udpSend(socket, message, rawUrl, callback = () => {}) {
-//   try {
-//    const url = parse(rawUrl);
-//    console.log(url);
-//    // socket.send(message, url.port, url.host, callback);
-//    socket.send(message, 6681, url.host, callback);
-//   } catch (error) {
-//     console.error(`Invalid URL object:`, error);
-//   }
-// }
+
 
 const respType = (resp) => {
   const action = resp.readUInt32BE(0);
