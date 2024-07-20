@@ -27,6 +27,7 @@ export const getPeers = (torrent, callback) => {
     } else if (respType(response) === "announce") {
       // 4. parse announce response
       const announceResp = parseAnnounceResp(response);
+      console.log("announce ko response", announceResp);
       // 5. pass peers to callback
       callback(announceResp.peers);
     }
