@@ -11,7 +11,7 @@ export default (torrent) => {
 };
 
 function download(peer) {
-  const socket = Socket();
+  const socket = new Socket();
   socket.on("error", console.log);
   socket.connect(peer.port, peer.ip, () => {
     // socket.write( xyz message )
@@ -28,6 +28,15 @@ function download(peer) {
 // 2
 function msgHandler(msg, socket) {
   if (isHandshake(msg)) socket.write(message.buildInterested());
+  else {
+    const m = message.parse(msg);
+
+    if (m.id === 0) chokeHandler();
+    if (m.id === 1) unchokeHandler();
+    if (m.id === 4) haveHandler(m.payload);
+    if (m.id === 5) bitfieldHandler(m.payload);
+    if (m.id === 7) pieceHandler(m.payload);
+  }
 }
 
 // 3
@@ -56,21 +65,12 @@ function onWholeMsg(socket, callback) {
   });
 }
 
-export const parse = (msg) => {
-  const id = msg.length > 4 ? msg.readInt8(4) : null;
-  let payload = msg.length > 5 ? msg.slice(5) : null;
-  if (id === 6 || id === 7 || id === 8) {
-    const rest = payload.slice(8);
-    payload = {
-      index: payload.readInt32BE(0),
-      begin: payload.readInt32BE(4),
-    };
-    payload[id === 7 ? "block" : "length"] = rest;
-  }
+const chokeHandler = () => { }
 
-  return {
-    size: msg.readInt32BE(0),
-    id: id,
-    payload: payload,
-  };
-};
+const unchokeHandler = () =>{ }
+
+const haveHandler = (payload)=> {  }
+
+const bitfieldHandler = (payload) =>{ }
+
+const pieceHandler = (payload) =>{  }
