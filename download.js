@@ -1,49 +1,53 @@
 import { Socket } from "net";
 import { Buffer } from "buffer";
-import { getPeers } from "./tracker.js";
+import * as tracker from "./tracker.js";
 import * as message from "./message.js";
+//.
+import Pieces from './Pieces.js'
 
 export default (torrent) => {
-  const requested = [];
-  getPeers(torrent, (peers) => {
-    //1
-    peers.forEach((peer) => download(peer, torrent, requested));
+
+  tracker.getPeers(torrent, (peers) => {
+    //.
+    const pieces = new Pieces (torrent.info.pieces.length/20);
+    peers.forEach((peer) => download(peer, torrent, pieces));
   });
 };
 
-function download(peer, torrent, requested) {
+//.
+function download(peer, torrent, pieces) {
   const socket = new Socket();
   socket.on("error", console.log);
   socket.connect(peer.port, peer.ip, () => {
-    // socket.write( xyz message )
-    // 1
+    
     socket.write(message.buildHandshake(torrent));
-    // 2
-    //...
-    const queue = [];
-    onWholeMsg(socket, (msg) => msgHandler(msg, socket, requested, queue));
+    //.
+    const queue = { choked: true, queue:[]};
+    onWholeMsg(socket, (msg) => msgHandler(msg, socket, pieces, queue));
   });
-  socket.on("data", (data) => {
-    // handle response
-  });
+
+
+  // socket.on("data", (data) => {
+  //   // handle response
+  // });
 }
 
-// 2
-function msgHandler(msg, socket, requested, queue) {
+// .
+function msgHandler(msg, socket, pieces, queue) {
   if (isHandshake(msg)) socket.write(message.buildInterested());
   else {
     const m = message.parse(msg);
 
-    if (m.id === 0) chokeHandler();
-    if (m.id === 1) unchokeHandler();
-    //...
-    if (m.id === 4) haveHandler(m.payload, socket, requested, queue);
+    if (m.id === 0) chokeHandler(socket);
+    //.
+    if (m.id === 1) unchokeHandler(socket, pieces, queue);
+    if (m.id === 4) haveHandler(m.payload);
     if (m.id === 5) bitfieldHandler(m.payload);
-    if (m.id === 7) pieceHandler(m.payload, socket, requested, queue);
+    if (m.id === 7) pieceHandler(m.payload, socket, pieces, queue);
   }
 }
 
-// 3
+
 function isHandshake(msg) {
   return (
     msg.length === msg.readUInt8(0) + 49 &&
@@ -69,20 +73,24 @@ function onWholeMsg(socket, callback) {
   });
 }
 
-const chokeHandler = () => {};
+const chokeHandler = (socket) => { socket.end()};
+//.
+const unchokeHandler = (socket,pieces, queue) => {
+  queue.choked = false;
+  //..
+  requestPiece(socket, pieces, queue);
+};
 
-const unchokeHandler = () => {};
-
-const haveHandler = (payload, socket, requested, queue) => {
+const haveHandler = (payload, socket, pieces, queue) => {
   // ...
   const pieceIndex = payload.readUInt32BE(0);
 
   queue.push(pieceIndex);
   if (queue.length === 1) {
-    requestPiece(socket, requested, queue);
+    requestPiece(socket, pieces, queue);
   }
 
-  if (!requested[pieceIndex]) {
+  if (!pieces[pieceIndex]) {
     socket.write(
       message
         .buildRequest
@@ -90,23 +98,28 @@ const haveHandler = (payload, socket, requested, queue) => {
         ()
     );
   }
-  requested[pieceIndex] = true;
+  pieces[pieceIndex] = true;
 };
 
 const bitfieldHandler = (payload) => {};
 
-const pieceHandler = (payload, socket, requested, queue) => {
+const pieceHandler = (payload, socket, pieces, queue) => {
   // ...
   queue.shift();
-  requestPiece(socket, requested, queue);
+  requestPiece(socket, pieces, queue);
 };
+//.
+function requestPiece(socket, pieces, queue) {
+  //..
+  if (queue.choked) return null;
 
-function requestPiece(socket, requested, queue) {
-  if (requested[queue[0]]) {
-    queue.shift();
-  } else {
-    // this is pseudo-code, as buildRequest actually takes slightly more
-    // complex arguments
-    socket.write(message.buildRequest(pieceIndex));
+  while (queue.queue.length) {
+    const pieceIndex = queue.shift();
+    if (pieces.needed(pieceIndex)) {
+      // need to fix this
+      socket.write(message.buildRequest(pieceIndex));
+      pieces.addRequested(pieceIndex);
+      break;
+    }
   }
 }
